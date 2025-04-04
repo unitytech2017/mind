@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>구글 스프레드시트 연동 마인드맵</title>
+  <style>
+    /* 전역 스타일 */
+    :root {
+      --primary-color: #4a90e2;
+      --secondary-color: #50c878;
+      --text-color: #333;
+      --background-color: #f8f9fa;
+      --node-background: #fff;
+      --node-border: #ddd;
+      --node-selected: #e5f3ff;
+      --root-node-background: #f0f8ff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: var(--text-color);
+      background-color: var(--background-color);
+      line-height: 1.6;
+    }
+
+    .banner {
+      background-color: #ffc107;
+      color: #212529;
+      padding: 10px;
+      text-align: center;
+      font-weight: bold;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+      color: var(--primary-color);
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 8px 16px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 14px;
+      margin-right: 10px;
+      margin-bottom: 20px;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    .btn.save-btn {
+      background-color: #28a745;
+    }
+
+    .btn.load-btn {
+      background-color: #17a2b8;
+    }
+
+    /* 마인드맵 스타일 */
+    .mind-map-container {
+      width: 100%;
+      height: 70vh;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: auto;
+      position: relative;
+      background-color: #f9f9f9;
+    }
+
+    .mind-map {
+      position: relative;
+      width: 2000px;
+      height: 1500px;
+    }
+
+    .mind-map-node {
+      position: absolute;
+      width: 150px;
+      min-height: 50px;
+      padding: 10px;
+      background-color: white;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+      cursor: pointer;
+      z-index: 1;
+    }
+
+    .mind-map-node.root {
+      background-color: var(--root-node-background);
+      border-color: var(--primary-color);
+    }
+
+    .mind-map-node.selected {
+      box-shadow: 0 0 0 2px var(--primary-color);
+      background-color: var(--node-selected);
+    }
+
+    .node-text {
+      font-size: 14px;
+      word-break: break-word;
+    }
+
+    .node-input {
+      width: 100%;
+      border: none;
+      outline: none;
+      background-color: transparent;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .mind-map-edge {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 0;
+    }
+
+    .context-menu {
+      position: absolute;
+      background-color: white;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      min-width: 150px;
+    }
+
+    .context-menu-item {
+      padding: 8px 15px;
+      cursor: pointer;
+    }
+
+    .context-menu-item:hover {
+      background-color: var(--node-selected);
+    }
+
+    .instructions {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #e9ecef;
+      border-radius: 8px;
+    }
+
+    .instructions h2 {
+      margin-bottom: 10px;
+      font-size: 18px;
+    }
+
+    .instructions ul {
+      margin-left: 20px;
+    }
+
+    .status {
+      margin-top: 10px;
+      font-style: italic;
+      color: #666;
+    }
+
+    .setup-info {
+      margin-top: 20px;
+      padding: 15px;
+      background-color: #d1ecf1;
+      border-radius: 8px;
+      border: 1px solid #bee5eb;
+    }
+
+    .url-input {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    #loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 9999;
+    }
+
+    .spinner {
+      border: 5px solid #f3f3f3;
+      border-top: 5px solid var(--primary-color);
+      border-radius: 50%;
+      width: 50px;
+      height: 50px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    
+    #error-message {
+      background-color: #f8d7da;
+      color: #721c24;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+      display: none;
+    }
+    
+    #success-message {
+      background-color: #d4edda;
+      color: #155724;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 4px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="banner">
+    구글 스프레드시트 연동 마인드맵
+  </div>
+
+  <div class="container">
+    <h1>마인드맵</h1>
+    
+    <div id="error-message"></div>
+    <div id="success-message"></div>
+    
+    <div class="action-buttons">
+      <button id="add-node-btn" class="btn">새 노드 추가</button>
+      <button id="edit-node-btn" class="btn">선택 노드 편집</button>
+      <button id="clear-btn" class="btn">초기화</button>
+      <button id="save-google-btn" class="btn save-btn">구글에 저장</button>
+      <button id="load-google-btn" class="btn load-btn">구글에서 불러오기</button>
+    </div>
+    
+    <div class="setup-info">
+      <h2>구글 스프레드시트 설정</h2>
+      <p>구글 앱스 스크립트 URL을 입력하세요:</p>
+      <input type="text" id="script-url" class="url-input" placeholder="구글 앱스 스크립트 URL" value="https://script.google.com/macros/s/AKfycbwtF11Nacuk7LpLwYIbq1qnSttv9XnjV3R_j8v1qvN2MIsEIam4V3aDAvfPAfkUQ6fAVg/exec">
+      <button id="update-url-btn" class="btn">URL 저장</button>
+    </div>
+    
+    <p class="status">현재 선택된 노드: <span id="selected-node-status">없음</span></p>
+    
+    <div class="mind-map-container">
+      <div class="mind-map" id="mind-map">
+        <!-- 마인드맵이 여기에 렌더링됩니다 -->
+      </div>
+    </div>
+
+    <div class="instructions">
+      <h2>사용법</h2>
+      <ul>
+        <li>노드를 <strong>클릭</strong>하여 선택할 수 있습니다.</li>
+        <li>노드에서 <strong>오른쪽 클릭</strong>하여 하위 노드 추가나 삭제 옵션을 볼 수 있습니다.</li>
+        <li>노드를 <strong>더블 클릭</strong>하거나 '선택 노드 편집' 버튼을 클릭하여 텍스트를 편집할 수 있습니다.</li>
+        <li><strong>드래그</strong>하여 노드를 이동할 수 있습니다.</li>
+        <li>"<strong>새 노드 추가</strong>" 버튼을 클릭하면 선택된 노드에 하위 노드가 추가됩니다.</li>
+        <li>"<strong>구글에 저장</strong>" 버튼을 클릭하면 현재 마인드맵이 구글 스프레드시트에 저장됩니다.</li>
+        <li>"<strong>구글에서 불러오기</strong>" 버튼을 클릭하면 구글 스프레드시트에서 마인드맵을 불러옵니다.</li>
+      </ul>
+    </div>
+  </div>
+  
+  <div id="loading-overlay" class="hidden">
+    <div class="spinner"></div>
+  </div>
+
+  <script>
+    // 마인드맵 구현
+    document.addEventListener('DOMContentLoaded', function() {
+      const mindMap = document.getElementById('mind-map');
+      const addNodeBtn = document.getElementById('add-node-btn');
+      const editNodeBtn = document.getElementById('edit-node-btn');
+      const clearBtn = document.getElementById('clear-btn');
+      const selectedNodeStatus = document.getElementById('selected-node-status');
+      const saveGoogleBtn = document.getElementById('save-google-btn');
+      const loadGoogleBtn = document.getElementById('load-google-btn');
+      const loadingOverlay = document.getElementById('loading-overlay');
+      const scriptUrlInput = document.getElementById('script-url');
+      const updateUrlBtn = document.getElementById('update-url-btn');
+      const errorMessage = document.getElementById('error-message');
+      const successMessage = document.getElementById('success-message');
+      
+      // 로컬 스토리지에서 URL 불러오기
+      let GOOGLE_SCRIPT_URL = localStorage.getItem('googleScriptUrl') || scriptUrlInput.value;
+      scriptUrlInput.value = GOOGLE_SCRIPT_URL;
+      
+      let nodes = [];
+      let edges = [];
+      let selectedNode = null;
+      let dragNode = null;
+      let offsetX, offsetY;
+      let isEditingNode = false;
+      
+      // 메시지 표시 함수들
+      function showError(message, duration = 5000) {
+        errorMessage.textContent = message;
+        errorMessage.style.display = 'block';
+        successMessage.style.display = 'none';
+        
+        if (duration > 0) {
+          setTimeout(() => {
+            errorMessage.style.display = 'none';
+          }, duration);
+        }
+      }
+      
+      function showSuccess(message, duration = 5000) {
+        successMessage.textContent = message;
+        successMessage.style.display = 'block';
+        errorMessage.style.display = 'none';
+        
+        if (duration > 0) {
+          setTimeout(() => {
+            successMessage.style.display = 'none';
+          }, duration);
+        }
+      }
+      
+      // 로딩 표시
+      function showLoading() {
+        loadingOverlay.classList.remove('hidden');
+      }
+      
+      function hideLoading() {
+        loadingOverlay.classList.add('hidden');
+      }
+      
+      // 타임아웃으로 로딩 강제 종료
+      function setupLoadingTimeout() {
+        return setTimeout(() => {
+          hideLoading();
+          showError('요청 시간이 초과되었습니다. 구글 스크립트 URL을 확인해주세요.');
+          console.warn('로딩 타임아웃: 30초 경과');
+        }, 30000);
+      }
+      
+      // 구글 스크립트 URL 업데이트
+      updateUrlBtn.addEventListener('click', function() {
+        const newUrl = scriptUrlInput.value.trim();
+        if (newUrl) {
+          GOOGLE_SCRIPT_URL = newUrl;
+          localStorage.setItem('googleScriptUrl', GOOGLE_SCRIPT_URL);
+          showSuccess('URL이 저장되었습니다.');
+        } else {
+          showError('유효한 URL을 입력해주세요.');
+        }
+      });
+      
+      // 초기 루트 노드 생성
+      function initMindMap() {
+        nodes = [{
+          id: 'root',
+          text: '메인 아이디어',
+          x: 900,
+          y: 650,
+          type: 'root'
+        }];
+        edges = [];
+        selectedNode = null;
+        updateSelectedNodeStatus();
+        renderMindMap();
+        showSuccess('마인드맵이 초기화되었습니다.');
+      }
+
+      // 선택된 노드 상태 업데이트
+      function updateSelectedNodeStatus() {
+        if (selectedNode) {
+          const node = nodes.find(n => n.id === selectedNode);
+          selectedNodeStatus.textContent = node ? node.text : '없음';
+        } else {
+          selectedNodeStatus.textContent = '없음';
+        }
+      }
+
+      // 마인드맵 렌더링
+      function renderMindMap() {
+        // 기존 노드와 엣지 제거
+        mindMap.innerHTML = '';
+        
+        // 엣지 렌더링
+        const svgContainer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgContainer.classList.add('mind-map-edge');
+        mindMap.appendChild(svgContainer);
+        
+        edges.forEach(edge => {
+          const sourceNode = nodes.find(node => node.id === edge.source);
+          const targetNode = nodes.find(node => node.id === edge.target);
+          
+          if (sourceNode && targetNode) {
+            const sourceX = sourceNode.x + 75;
+            const sourceY = sourceNode.y + 25;
+            const targetX = targetNode.x + 75;
+            const targetY = targetNode.y + 25;
+            
+            const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            line.setAttribute('x1', sourceX);
+            line.setAttribute('y1', sourceY);
+            line.setAttribute('x2', targetX);
+            line.setAttribute('y2', targetY);
+            line.setAttribute('stroke', '#666');
+            line.setAttribute('stroke-width', '2');
+            
+            svgContainer.appendChild(line);
+          }
+        });
+        
+        // 노드 렌더링
+        nodes.forEach(node => {
+          const nodeEl = document.createElement('div');
+          nodeEl.className = `mind-map-node ${node.type || ''}`;
+          if (selectedNode === node.id) {
+            nodeEl.classList.add('selected');
+          }
+          nodeEl.style.left = `${node.x}px`;
+          nodeEl.style.top = `${node.y}px`;
+          nodeEl.dataset.id = node.id;
+          
+          const textEl = document.createElement('div');
+          textEl.className = 'node-text';
+          textEl.textContent = node.text;
+          nodeEl.appendChild(textEl);
+          
+          nodeEl.addEventListener('click', (e) => {
+            e.stopPropagation();
+            handleNodeClick(node.id);
+          });
+          
+          nodeEl.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleNodeContextMenu(e, node.id);
+          });
+          
+          nodeEl.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            handleNodeDoubleClick(node.id, nodeEl);
+          });
+          
+          nodeEl.addEventListener('mousedown', (e) => {
+            if (isEditingNode) return; // 편집 중이면 드래그 방지
+            e.stopPropagation();
+            handleNodeMouseDown(e, node.id);
+          });
+          
+          mindMap.appendChild(nodeEl);
+        });
+      }
+
+      // 노드 클릭 핸들러
+      function handleNodeClick(nodeId) {
+        if (isEditingNode) return; // 편집 중이면 선택 변경 방지
+        selectedNode = nodeId;
+        updateSelectedNodeStatus();
+        removeContextMenu();
+        renderMindMap();
+      }
+
+      // 노드 컨텍스트 메뉴 핸들러
+      function handleNodeContextMenu(e, nodeId) {
+        if (isEditingNode) return; // 편집 중이면 컨텍스트 메뉴 비활성화
+        
+        selectedNode = nodeId;
+        updateSelectedNodeStatus();
+        
+        // 컨텍스트 메뉴 위치 계산
+        const container = mindMap.parentElement;
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left + container.scrollLeft;
+        const y = e.clientY - rect.top + container.scrollTop;
+        
+        showContextMenu(x, y, nodeId);
+        renderMindMap();
+      }
+
+      // 노드 더블클릭 핸들러 (텍스트 편집)
+      function handleNodeDoubleClick(nodeId, nodeEl) {
+        enableNodeEditing(nodeId, nodeEl);
+      }
+      
+      // 노드 편집 활성화
+      function enableNodeEditing(nodeId, nodeEl) {
+        if (!nodeEl) {
+          // DOM에서 노드 엘리먼트 찾기
+          const allNodes = mindMap.querySelectorAll('.mind-map-node');
+          for (let i = 0; i < allNodes.length; i++) {
+            if (allNodes[i].dataset.id === nodeId) {
+              nodeEl = allNodes[i];
+              break;
+            }
+          }
+          if (!nodeEl) return; // 노드를 찾지 못함
+        }
+        
+        isEditingNode = true;
+        
+        const node = nodes.find(n => n.id === nodeId);
+        const textEl = nodeEl.querySelector('.node-text');
+        const currentText = node.text;
+        
+        // 기존 텍스트 요소 비우기
+        textEl.innerHTML = '';
+        
+        // 입력 필드 생성
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = currentText;
+        input.className = 'node-input';
+        textEl.appendChild(input);
+        
+        // 입력 필드 포커스
+        input.focus();
+        input.select();
+        
+        // 이벤트 핸들러 등록
+        input.addEventListener('blur', function() {
+          finishEditing(nodeId, input.value);
+        });
+        
+        input.addEventListener('keydown', function(e) {
+          if (e.key === 'Enter') {
+            finishEditing(nodeId, input.value);
+          } else if (e.key === 'Escape') {
+            finishEditing(nodeId, currentText); // 취소 - 원래 텍스트로 복원
+          }
+        });
+      }
+      
+      // 노드 편집 완료
+      function finishEditing(nodeId, text) {
+        isEditingNode = false;
+        updateNodeText(nodeId, text);
+      }
+
+      // 노드 텍스트 업데이트
+      function updateNodeText(nodeId, text) {
+        const node = nodes.find(n => n.id === nodeId);
+        if (node) {
+          node.text = text || '빈 노드';
+          updateSelectedNodeStatus();
+          renderMindMap();
+        }
+      }
+
+      // 노드 드래그 시작
+      function handleNodeMouseDown(e, nodeId) {
+        if (e.button !== 0) return; // 좌클릭만 처리
+        
+        dragNode = nodeId;
+        const nodeEl = e.currentTarget;
+        const rect = nodeEl.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+      }
+
+      // 마우스 이동 처리 (드래그)
+      function handleMouseMove(e) {
+        if (dragNode) {
+          const node = nodes.find(n => n.id === dragNode);
+          const container = mindMap.parentElement;
+          const rect = container.getBoundingClientRect();
+          
+          // 컨테이너 내 상대적 위치 계산
+          const x = e.clientX - rect.left + container.scrollLeft - offsetX;
+          const y = e.clientY - rect.top + container.scrollTop - offsetY;
+          
+          node.x = Math.max(0, Math.min(1850, x)); // 화면 밖으로 나가지 않도록
+          node.y = Math.max(0, Math.min(1450, y));
+          renderMindMap();
+        }
+      }
+
+      // 마우스 업 처리 (드래그 종료)
+      function handleMouseUp() {
+        dragNode = null;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      }
+
+      // 컨텍스트 메뉴 표시
+      function showContextMenu(x, y, nodeId) {
+        removeContextMenu();
+        
+        const contextMenu = document.createElement('div');
+        contextMenu.className = 'context-menu';
+        contextMenu.id = 'context-menu';
+        contextMenu.style.left = `${x}px`;
+        contextMenu.style.top = `${y}px`;
+        
+        const addChildItem = document.createElement('div');
+        addChildItem.className = 'context-menu-item';
+        addChildItem.textContent = '하위 노드 추가';
+        addChildItem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          addChildNode(nodeId);
+          removeContextMenu();
+        });
+        contextMenu.appendChild(addChildItem);
+        
+        const editItem = document.createElement('div');
+        editItem.className = 'context-menu-item';
+        editItem.textContent = '노드 편집';
+        editItem.addEventListener('click', (e) => {
+          e.stopPropagation();
+          
+          // 해당 노드 요소 찾기
+          const nodeElements = mindMap.querySelectorAll('.mind-map-node');
+          let targetNodeEl = null;
+          
+          for (let i = 0; i < nodeElements.length; i++) {
+            if (nodeElements[i].dataset.id === nodeId) {
+              targetNodeEl = nodeElements[i];
+              break;
+            }
+          }
+          
+          if (targetNodeEl) {
+            enableNodeEditing(nodeId, targetNodeEl);
+          }
+          
+          removeContextMenu();
+        });
+        contextMenu.appendChild(editItem);
+        
+        // 루트 노드가 아닌 경우에만 삭제 옵션 표시
+        if (nodeId !== 'root') {
+          const deleteItem = document.createElement('div');
+          deleteItem.className = 'context-menu-item';
+          deleteItem.textContent = '노드 삭제';
+          deleteItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            deleteNode(nodeId);
+            removeContextMenu();
+          });
+          contextMenu.appendChild(deleteItem);
+        }
+        
+        mindMap.appendChild(contextMenu);
+      }
+
+      // 컨텍스트 메뉴 제거
+      function removeContextMenu() {
+        const contextMenu = document.getElementById('context-menu');
+        if (contextMenu) {
+          contextMenu.parentNode.removeChild(contextMenu);
+        }
+      }
+
+      // 하위 노드 추가
+      function addChildNode(parentId) {
+        const parent = nodes.find(node => node.id === parentId);
+        if (!parent) return;
+        
+        // 부모 노드의 자식 노드 수 확인
+        const childCount = edges.filter(edge => edge.source === parentId).length;
+        
+        // 부모 노드를 기준으로 새 노드 위치 계산
+        let newX = parent.x + 200;
+        let newY = parent.y;
+        
+        // 자식이 여러 개 있는 경우 위치 조정
+        if (childCount > 0) {
+          newY = parent.y + (childCount % 2 === 0 ? 1 : -1) * ((childCount + 1) * 60);
+        }
+        
+        const newNodeId = `node-${Date.now()}`;
+        
+        const newNode = {
+          id: newNodeId,
+          text: '새 노드',
+          x: newX,
+          y: newY,
+          type: 'child'
+        };
+        
+        const newEdge = {
+          id: `edge-${Date.now()}`,
+          source: parentId,
+          target: newNodeId
+        };
+        
+        nodes.push(newNode);
+        edges.push(newEdge);
+        
+        selectedNode = newNodeId;
+        updateSelectedNodeStatus();
+        renderMindMap();
+        
+        // 새 노드가 보이도록 스크롤
+        const container = mindMap.parentElement;
+        container.scrollTo({
+          left: Math.max(0, newX - container.clientWidth / 2),
+          top: Math.max(0, newY - container.clientHeight / 2),
+          behavior: 'smooth'
+        });
+      }
+
+      // 노드 삭제
+      function deleteNode(nodeId) {
+        // 루트 노드는 삭제 불가
+        if (nodeId === 'root') return;
+        
+        // 자식 노드들도 함께 삭제
+        const childEdges = edges.filter(edge => edge.source === nodeId);
+        const childIds = childEdges.map(edge => edge.target);
+        
+        let nodesToDelete = [nodeId, ...childIds];
+        
+        // 재귀적으로 모든 하위 노드 찾기
+        function findAllChildren(ids) {
+          let allChildren = [];
+          
+          ids.forEach(id => {
+            const children = edges.filter(edge => edge.source === id).map(edge => edge.target);
+            if (children.length > 0) {
+              allChildren = [...allChildren, ...children, ...findAllChildren(children)];
+            }
+          });
+          
+          return allChildren;
+        }
+        
+        const allChildren = findAllChildren(childIds);
+        nodesToDelete = [...nodesToDelete, ...allChildren];
+        
+        // 노드와 엣지 필터링
+        nodes = nodes.filter(node => !nodesToDelete.includes(node.id));
+        edges = edges.filter(edge => 
+          !nodesToDelete.includes(edge.source) && !nodesToDelete.includes(edge.target)
+        );
+        
+        if (selectedNode && nodesToDelete.includes(selectedNode)) {
+          selectedNode = null;
+          updateSelectedNodeStatus();
+        }
+        
+        renderMindMap();
+      }
+      
+      // ===== 구글 스프레드시트 연동 기능 =====
+      
+      // 마인드맵 데이터 로드
+      async function loadMindMapFromGoogle() {
+        if (isEditingNode) {
+          showError('텍스트 편집을 먼저 완료해주세요.');
+          return;
+        }
+        
+        showLoading();
+        
+        // 로딩 타임아웃 설정
+        const timeoutId = setupLoadingTimeout();
+        
+        try {
+          console.log('구글 스크립트 URL 호출 시작:', GOOGLE_SCRIPT_URL);
+          
+          const url = `${GOOGLE_SCRIPT_URL}?operation=getMindMap&timestamp=${new Date().getTime()}`;
+          const response = await fetch(url);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP 오류: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          // 타임아웃 취소
+          clearTimeout(timeoutId);
+          hideLoading();
+          
+          if (data.success) {
+            if (data.nodes && data.nodes.length > 0) {
+              // 노드 데이터를 애플리케이션에 적용
+              nodes = data.nodes.map(node => ({
+                ...node,
+                x: parseFloat(node.x) || 900,
+                y: parseFloat(node.y) || 650
+              }));
+              
+              // 엣지 데이터가 있으면 사용, 없으면 부모 ID 기반으로 생성
+              if (data.edges && data.edges.length > 0) {
+                edges = data.edges;
+              } else {
+                // parent_id 기반으로 엣지 생성
+                edges = [];
+                nodes.forEach(node => {
+                  if (node.parent_id) {
+                    edges.push({
+                      id: `edge-${node.id}`,
+                      source: node.parent_id,
+                      target: node.id
+                    });
+                  }
+                });
+              }
+              
+              // 데이터가 로드되었다고 사용자에게 알림
+              showSuccess('마인드맵을 성공적으로 불러왔습니다!');
+              
+              // 화면 업데이트
+              selectedNode = null;
+              updateSelectedNodeStatus();
+              renderMindMap();
+            } else {
+              showError('저장된 마인드맵 데이터가 없습니다. 새 마인드맵을 시작합니다.');
+              initMindMap();
+            }
+          } else {
+            console.error('마인드맵 로드 실패:', data.error);
+            showError('마인드맵 불러오기에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+          }
+        } catch (error) {
+          // 타임아웃 취소
+          clearTimeout(timeoutId);
+          hideLoading();
+          console.error('마인드맵 로드 중 오류 발생:', error);
+          showError('마인드맵 불러오기 중 오류가 발생했습니다: ' + error.message);
+        }
+      }
+
+      // 마인드맵 데이터 저장
+      async function saveMindMapToGoogle() {
+        if (isEditingNode) {
+          showError('텍스트 편집을 먼저 완료해주세요.');
+          return;
+        }
+        
+        showLoading();
+        
+        // 로딩 타임아웃 설정
+        const timeoutId = setupLoadingTimeout();
+        
+        try {
+          console.log('구글 스크립트 URL 호출 시작:', GOOGLE_SCRIPT_URL);
+          
+          // 엣지 정보를 기반으로 부모 ID 할당
+          const nodesWithParents = nodes.map(node => {
+            const nodeObj = { ...node };
+            const edge = edges.find(e => e.target === node.id);
+            if (edge) {
+              nodeObj.parent_id = edge.source;
+            }
+            return nodeObj;
+          });
+          
+          const params = new URLSearchParams({
+            operation: 'saveMindMap',
+            nodes: JSON.stringify(nodesWithParents),
+            edges: JSON.stringify(edges)
+          });
+          
+          const response = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params
+          });
+          
+          if (!response.ok) {
+            throw new Error(`HTTP 오류: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          // 타임아웃 취소
+          clearTimeout(timeoutId);
+          hideLoading();
+          
+          if (data.success) {
+            showSuccess('마인드맵이 성공적으로 저장되었습니다!');
+          } else {
+            console.error('마인드맵 저장 실패:', data.error);
+            showError('마인드맵 저장에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+          }
+        } catch (error) {
+          // 타임아웃 취소
+          clearTimeout(timeoutId);
+          hideLoading();
+          console.error('마인드맵 저장 중 오류 발생:', error);
+          showError('마인드맵 저장 중 오류가 발생했습니다: ' + error.message);
+        }
+      }
